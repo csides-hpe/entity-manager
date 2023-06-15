@@ -312,11 +312,7 @@
         }
     ],
     "Name": "HPE DL360 G10 POC Server",
-    "Probe": [
-        "xyz.openbmc_project.FruDevice({'PRODUCT_MANUFACTURER': 'Hewlett Packard Enterprise'})",
-        "AND",
-        "xyz.openbmc_project.FruDevice({'SERVER_ID': '0x0204'})"
-    ],
+    "Probe": "xyz.openbmc_project.FruDevice({'BoardID': '123'})",
     "Type": "Chassis",
     "xyz.openbmc_project.Inventory.Decorator.Asset": {
         "Manufacturer": "$PRODUCT_MANUFACTURER",
