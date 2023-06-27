@@ -23,8 +23,8 @@
 #include <sys/ioctl.h>
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/io_service.hpp>
 #include <boost/container/flat_map.hpp>
 #include <nlohmann/json.hpp>
 #include <sdbusplus/asio/connection.hpp>
@@ -81,7 +81,7 @@ static boost::container::flat_map<
 static boost::container::flat_map<size_t, std::set<size_t>> failedAddresses;
 static boost::container::flat_map<size_t, std::set<size_t>> fruAddresses;
 
-boost::asio::io_context io;
+boost::asio::io_service io;
 
 bool updateFRUProperty(
     const std::string& updatePropertyReq, uint32_t bus, uint32_t address,
@@ -939,8 +939,8 @@ void rescanBusses(
     sdbusplus::asio::object_server& objServer,
     std::shared_ptr<sdbusplus::asio::connection>& systemBus)
 {
-    static boost::asio::steady_timer timer(io);
-    timer.expires_from_now(std::chrono::seconds(1));
+    static boost::asio::deadline_timer timer(io);
+    timer.expires_from_now(boost::posix_time::seconds(1));
 
     // setup an async wait in case we get flooded with requests
     timer.async_wait([&](const boost::system::error_code& ec) {
@@ -1146,13 +1146,12 @@ bool updateFRUProperty(
         std::copy(restFRUAreasData.begin(), restFRUAreasData.end(),
                   fruData.begin() + nextFRUAreaNewLoc);
         // Update Common Header
-        for (fruAreas nextFRUArea = fruAreas::fruAreaInternal;
-             nextFRUArea <= fruAreas::fruAreaMultirecord; ++nextFRUArea)
+        for (int fruArea = fruAreaInternal; fruArea <= fruAreaMultirecord;
+             fruArea++)
         {
-            unsigned int fruAreaOffsetField =
-                getHeaderAreaFieldOffset(nextFRUArea);
+            unsigned int fruAreaOffsetField = getHeaderAreaFieldOffset(fruArea);
             size_t curFRUAreaOffset = fruData[fruAreaOffsetField];
-            if (curFRUAreaOffset > fruAreaParams.end)
+            if (curFRUAreaOffset > fruAreaOffsetFieldValue)
             {
                 fruData[fruAreaOffsetField] = static_cast<int8_t>(
                     curFRUAreaOffset + nextFRUAreaOffsetDiff);
@@ -1198,11 +1197,9 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
 {
     enum FRUType
     {
-        gxp = 0,
-        dummy
+        none = 0,
+        gxp
     }; 
-
-    //TODO: probably need to add a varaible to allow users to define the 'end of data' character(s) to watch for
 
     std::map<FRUType, //Key: FRUType, Value: a map of associated directories + a list associated filenames +  field name strings for each
         std::map<fs::path, //Key: directory path to expected files, Value: paired list of expected filenames + field names associated w/ the directory 
@@ -1215,7 +1212,7 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
                                                                     {"pca_pn", "pca_part_number"},
                                                                     {"mac_0", "MAC0"},
                                                                     {"mac_1", "MAC1"} }; 
-    managedFRUPaths[FRUType::gxp]["/sys/class/soc/xreg/"] = { {"xreg/server_id", "server_id"} };
+    managedFRUPaths[FRUType::gxp]["/sys/class/soc/xreg/"] = { {"server_id", "server_id"} };
     //Associated directories, filenames, and field name stings for other FRU types to be handled should be added here
 
     FRUType typeFound; //set to discovered type when a valid path match is found
@@ -1237,9 +1234,7 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
                 typeFound = managedFRU;
                 break; //may swap this out later, but for now, let's keep "detect which managed FRU" and "read managed data" as seperate
                     //we may want to add more complexity to 'detect which FRU' later in the event of other managed devices having similar directory paths
-
             }
-    
         }        
     }
 
@@ -1248,26 +1243,24 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
         return; //no valid paths found, so exit
     }
 
-    std::string manufacturer;
+    std::string manufacturer, interfaceName;
     switch (typeFound)
     {
         case FRUType::gxp:
             manufacturer= "Hewlett Packard Enterprise";
+            interfaceName= "GXP";
             break;
         default:
             manufacturer= "Unspecified";
+            interfaceName= "generic";
         break;
     }
 
-    /*
-    if (typeFound == FRUType::gxp) //manufacturer needs to be manually set for HPE systems at this time...
-    {
-        manufacturer= "Hewlett Packard Enterprise";
-    } */
-
-    std::string interfaceName= typeFound+"FRU";
+    interfaceName+= "FRU";
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface =
-        objServer.add_interface(interfaceName, "xyz.openbmc_project.FruDevice");
+        objServer.add_interface("/xyz/openbmc_project/FruDevice/" +interfaceName, "xyz.openbmc_project.FruDevice");
+
+    iface->register_property("product_manufacturer", manufacturer); 
 
     for(auto managedPath : managedFRUPaths[typeFound])
     {
@@ -1278,13 +1271,10 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
         {
             for (auto knownFile : managedPath.second)
             {
-                //fs:path fileName = knownFile.first;
-                //TODO: pretty sure I need to modify the path to include filename + directory path!
+                
                 fs::path fullFilePath= directoryPath;
                 fullFilePath += knownFile.first;
-                //fullFilePath+=fileName;
 
-                std::cerr << "ChrisDebug: checking filePath: " <<fullFilePath <<"\n";
                 std::ifstream FRUStream(fullFilePath);
 
                 if (!FRUStream)
@@ -1297,51 +1287,30 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
 
                 //bail out if we can't read the dataFile
                 if (!std::getline(FRUStream, managedFieldData))
-                    continue;
-                
-                //TODO: need to add code to shave off the end of file inputs from managedFRU.There's almost always a variable number of 'whitespace' characters 
-
-                //handle for the offchance that there's more than one line of data to be read in
-                while (std::getline(FRUStream, managedFieldDataLine))
                 {
-                    //TODO: need to add code to shave off the end of file inputs from managedFRU.There's almost always a variable number of 'whitespace' characters 
-                    managedFieldData += "\n"+managedFieldDataLine; 
+                    continue;
                 }
 
-                iface->register_property(fieldName, managedFieldData);
+                //handle for the offchance that there's more than one line of data to be read in
+               // while (std::getline(FRUStream, managedFieldDataLine))
+               // {
+                    //TODO: need to add code to shave off the end of file inputs from managedFRU.There's almost always a variable number of 'whitespace' characters 
+                //    managedFieldData += "\n"+managedFieldDataLine; 
+               // }
+
+               //remove non-alphanumeric & whitespace chars before writing to dbus
+                std::erase_if(managedFieldData, [](char const &c) {
+                    return !(std::isalnum(c) || std::isspace(c)); 
+                });
+
+                iface->register_property(fieldName, managedFieldData+'\0');
+
             }
+
         }
+
     }
-
-    //scan for all existing paths.
-    //////unchecked code
-    //std::string FRUInstance = (FRUType)managedFRUPaths[0].second; //temp; == "GxpFRU"
-    
-    
-    //fire this off if files we're checking for exist.
-    //should consider using a map-type setup (like we did for the dbus-sensors modification) to track filepaths to be handled.
-    ///std::string productName =
-    ///    "/xyz/openbmc_project/FruDevice/"+FRUType;
-
-    ///std::shared_ptr<sdbusplus::asio::dbus_interface> iface =
-    ///    objServer.add_interface(productName, "xyz.openbmc_project.FruDevice");
-
-    iface->register_property("BoardID", 123); //Temporary BoardID here for now.
-    //iface->register_property("TestField", "FieldValue Here!");
-/*
-    foreach(auto managedType in mangedFRUPaths)
-    {
-        //managedType.first() is the FRUType maangedType.second() is the list of [assocaited directory paths (string), field name (string)]
-        //iterate through the list of paths associated with the type
-        foreach(auto managedPath in managedType.second())
-        {
-            std::string pathEnd = managedPath.first();
-            std::string fieldName = managedPath.second();
-
-            //need to compare the pathEnd against a list of files found in the directory path.
-        }
-    }
- */
+   
     iface->initialize(); 
     
 }
@@ -1350,6 +1319,8 @@ int main()
 {
     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
     sdbusplus::asio::object_server objServer(systemBus);
+
+    std::cerr << "ChrisDebug: entered MAIN() \n";
 
     static size_t unknownBusObjectCount = 0;
     static bool powerIsOn = false;
@@ -1470,15 +1441,6 @@ int main()
                                           << "\n";
                                 continue;
                             }
-                            int rootBus = getRootBus(bus);
-                            if (rootBus >= 0)
-                            {
-                                rescanOneBus(busMap,
-                                             static_cast<uint16_t>(rootBus),
-                                             dbusInterfaceMap, false,
-                                             unknownBusObjectCount, powerIsOn,
-                                             objServer, systemBus);
-                            }
                             rescanOneBus(busMap, static_cast<uint16_t>(bus),
                                          dbusInterfaceMap, false,
                                          unknownBusObjectCount, powerIsOn,
@@ -1497,6 +1459,7 @@ int main()
     rescanBusses(busMap, dbusInterfaceMap, unknownBusObjectCount, powerIsOn,
                  objServer, systemBus);
 
+    std::cerr << "ChrisDebug: about to enter addManagedDevices \n";
     addManagedDevices(objServer);
 
     io.run();

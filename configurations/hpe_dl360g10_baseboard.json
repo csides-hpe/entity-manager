@@ -311,14 +311,14 @@
             "Type": "XeonCPU"
         }
     ],
-    "Name": "HPE DL360 G10 POC Server",
-    "Probe": "xyz.openbmc_project.FruDevice({'BoardID': '123'})",
+    "Name": "HPE DL360 G11 Server",
+    "Probe": "xyz.openbmc_project.FruDevice({'pca_part_number': 'P42353001'})",
     "Type": "Chassis",
     "xyz.openbmc_project.Inventory.Decorator.Asset": {
         "Manufacturer": "$PRODUCT_MANUFACTURER",
-        "Model": "DL360 Gen10",
-        "PartNumber": "$PCA_PART_NUMBER",
-        "SerialNumber": "$PCA_SERIAL_NUMBER"
+        "Model": "DL360 Gen11",
+        "PartNumber": "$pca_part_number",
+        "SerialNumber": "$pca_serial_number"
     },
     "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
         "AssetTag": "HPE-OBMC-001"
