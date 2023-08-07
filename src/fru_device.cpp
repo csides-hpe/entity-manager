@@ -1191,64 +1191,80 @@ bool updateFRUProperty(
     return true;
 }
 
-
-
-void addManagedDevices(sdbusplus::asio::object_server& objServer)
+//Scan for directories and files associated with managed FRU devices and write to d-bus
+void addManagedFRUDevices(sdbusplus::asio::object_server& objServer)
 {
-    enum FRUType
+    //Managed FRU Device types
+    enum managedFRUType
     {
         none = 0,
         gxp
     }; 
 
-    std::map<FRUType, //Key: FRUType, Value: a map of associated directories + a list associated filenames +  field name strings for each
-        std::map<fs::path, //Key: directory path to expected files, Value: paired list of expected filenames + field names associated w/ the directory 
-            std::vector< //list of 'known' files to look for
-                std::pair<fs::path, std::string>>>> managedFRUPaths; //pair<filename, field name>
-
-    managedFRUPaths[FRUType::gxp]["/proc/device-tree/chosen/"] = { {"sn", "serial_number"},
-                                                                    {"pca_sn", "pca_serial_number"},
-                                                                    {"pn", "part_number"},
-                                                                    {"pca_pn", "pca_part_number"},
-                                                                    {"mac_0", "MAC0"},
-                                                                    {"mac_1", "MAC1"} }; 
-    managedFRUPaths[FRUType::gxp]["/sys/class/soc/xreg/"] = { {"server_id", "server_id"} };
-    //Associated directories, filenames, and field name stings for other FRU types to be handled should be added here
-
-    FRUType typeFound; //set to discovered type when a valid path match is found
-    namespace fs = std::filesystem;
-
-    for (auto managedType : managedFRUPaths)
+    //Managed FRU Device file formats
+    enum fileDataType
     {
-        fs::path directoryPath;
-        FRUType managedFRU;
+        string = 0,
+        hexBinary
+    };
 
-        //loop through each of the paths managed for a given FRUtype
-        for (auto managedPath : managedType.second)
+    using managedDataFile = std::tuple<fs::path, std::string, fileDataType>; //filename + metadata for a Managed FRU Device datafile; tuple:[filename, dbus property name, file data type] 
+    using managedDirectories = std::map<fs::path, std::vector<managedDataFile>>; //associates a directory path with a list of Managed FRU Device files + metadata
+    
+    using managedTypeAssociations = std::map<managedFRUType, managedDirectories>; //associates a Managed FRU Device type with a list of Managed FRU Device directory paths + file metadata. 
+
+    managedTypeAssociations managedFRUs; //Support for Managed FRU Devices is to be 'manually' added below
+    
+    managedFRUType foundFRUType; //discovered FRU type when a match is found
+
+    managedDirectories gxpPaths;
+    gxpPaths["/proc/device-tree/chosen/"] = { 
+                                                                    {"sn", "serial_number", fileDataType::string},
+                                                                    {"pca_sn", "pca_serial_number", fileDataType::string},
+                                                                    {"pn", "part_number", fileDataType::string},
+                                                                    {"pca_pn", "pca_part_number", fileDataType::string}, 
+                                                                    {"mac_0", "MAC0", fileDataType::hexBinary},
+                                                                    {"mac_1", "MAC1", fileDataType::hexBinary} 
+                                                                 };                                                   
+    gxpPaths["/sys/class/soc/xreg/"] = { 
+                                                {"server_id", "server_id", fileDataType::string} 
+                                            };
+                         
+    managedFRUs[managedFRUType::gxp] = gxpPaths;
+    
+    //find if we're dealing with a known FRU type by scanning for associated directories
+
+    for (auto specificFRU : managedFRUs)
+    {
+        managedFRUType specificFRUType = specificFRU.first;  //get managed FRU type
+        managedDirectories managedDirectories = specificFRU.second; //get map of [FRU associated directory path] => [file metadata list]
+
+        for (auto managedDirectory : managedDirectories)
         {
-            managedFRU = managedType.first;
-            directoryPath = managedPath.first;
+            fs::path specificFRUDriectoryPath = managedDirectory.first; //get directory path
 
-            if (fs::exists(directoryPath))
+            if (fs::exists(specificFRUDriectoryPath))
             {
-                typeFound = managedFRU;
-                break; //may swap this out later, but for now, let's keep "detect which managed FRU" and "read managed data" as seperate
-                    //we may want to add more complexity to 'detect which FRU' later in the event of other managed devices having similar directory paths
-            }
-        }        
+                foundFRUType = specificFRUType;
+
+                //TODO: in the future, we may want to identify FRU types against a list of paths and/or files that need to match,
+                //instead of just keying off the first matching path found like we are now
+                break;
+            }    
+        }  
     }
 
-    if (!typeFound)
+    if (!foundFRUType)
     {
         return; //no valid paths found, so exit
     }
 
     std::string manufacturer, interfaceName;
-    switch (typeFound)
+    switch (foundFRUType)
     {
-        case FRUType::gxp:
+        case managedFRUType::gxp:
             manufacturer= "Hewlett Packard Enterprise";
-            interfaceName= "GXP";
+            interfaceName= "GXPFRU";
             break;
         default:
             manufacturer= "Unspecified";
@@ -1256,61 +1272,95 @@ void addManagedDevices(sdbusplus::asio::object_server& objServer)
         break;
     }
 
-    interfaceName+= "FRU";
     std::shared_ptr<sdbusplus::asio::dbus_interface> iface =
-        objServer.add_interface("/xyz/openbmc_project/FruDevice/" +interfaceName, "xyz.openbmc_project.FruDevice");
+    objServer.add_interface("/xyz/openbmc_project/FruDevice/" +interfaceName, "xyz.openbmc_project.FruDevice");
 
     iface->register_property("product_manufacturer", manufacturer); 
 
-    for(auto managedPath : managedFRUPaths[typeFound])
+    //loop through directories mapped to each FRU type to scan for known files. If found, read and save the data to dbus.
+
+    managedDirectories targetDirectories = managedFRUs[foundFRUType];
+
+    for (auto managedDirectory : targetDirectories ) //TODO: this should be changed since there's no longer more than one map.
     {
-        fs::path directoryPath;
-    
-        directoryPath = managedPath.first; 
-        if (fs::exists(directoryPath))
-        {
-            for (auto knownFile : managedPath.second)
-            {
+        fs::path directoryPath = managedDirectory.first;
+        std::vector<managedDataFile> targetFiles = managedDirectory.second; 
+        
+        if (!fs::exists(directoryPath))
+        { continue; }
+
+        //scan for known filenames assocaited with this FRUType+directory 
+        for (auto knownFile : targetFiles)
+        {     
+            fs::path fullFilePath = directoryPath;
+            fullFilePath += std::get<0>(knownFile); //append filename extracted tuple
                 
-                fs::path fullFilePath= directoryPath;
-                fullFilePath += knownFile.first;
+            std::string dbusPropertyName = std::get<1>(knownFile);  //extract d-bus property name from tuple
+            fileDataType fieldFileDataType = (fileDataType)std::get<2>(knownFile); //extract file data type from tuple
 
-                std::ifstream FRUStream(fullFilePath);
+            std::ifstream FRUStream; 
+            std::streampos size;
+            std::string managedFieldData;
+            std::stringstream ss;
 
-                if (!FRUStream)
-                {
-                    continue; //couldn't open the filepath,so continue on
-                }
+            switch (fieldFileDataType)
+            {
+                    
+                    case fileDataType::hexBinary:
 
-                std::string fieldName = knownFile.second;
-                std::string managedFieldData, managedFieldDataLine;
+                        FRUStream = std::ifstream(fullFilePath, std::ios::binary);
+                        if (!FRUStream)
+                            { continue; } 
+                        
 
-                //bail out if we can't read the dataFile
-                if (!std::getline(FRUStream, managedFieldData))
-                {
-                    continue;
-                }
+                        char * memblock;
 
-                //handle for the offchance that there's more than one line of data to be read in
-               // while (std::getline(FRUStream, managedFieldDataLine))
-               // {
-                    //TODO: need to add code to shave off the end of file inputs from managedFRU.There's almost always a variable number of 'whitespace' characters 
-                //    managedFieldData += "\n"+managedFieldDataLine; 
-               // }
+                        //discover needed buffer size for memblock
+                        FRUStream.seekg (0, FRUStream.end); 
+                        size = FRUStream.tellg();   
+                        memblock = new char[size];
 
-               //remove non-alphanumeric & whitespace chars before writing to dbus
-                std::erase_if(managedFieldData, [](char const &c) {
-                    return !(std::isalnum(c) || std::isspace(c)); 
-                });
+                        FRUStream.seekg (0, FRUStream.beg); 
 
-                iface->register_property(fieldName, managedFieldData+'\0');
+                        FRUStream.read (memblock, size);
+                        FRUStream.close();
 
+                        managedFieldData = "0x";
+                        for (int i =0; i < size; i++)
+                        {
+                            ss << std::hex << (int)memblock[i];
+                        } 
+                        
+                        managedFieldData += ss.str();
+                        delete[] memblock;
+
+                        break;
+
+                    case fileDataType::string:
+                    default:  
+
+                        FRUStream = std::ifstream(fullFilePath);
+                
+                        if (!FRUStream || !std::getline(FRUStream, managedFieldData))
+                        {
+                            continue; //couldn't open the filepath,so continue on
+                        }
+
+                        //remove non-alphanumeric+whitespace chars before writing string to dbus
+                        std::erase_if(managedFieldData, [](char const &c) {
+                            return !(std::isalnum(c) || std::isspace(c)); 
+                            });
+
+                    break;
             }
+                
+            managedFieldData+='\0';
+            iface->register_property(dbusPropertyName, managedFieldData);
 
         }
 
     }
-   
+    
     iface->initialize(); 
     
 }
@@ -1319,8 +1369,6 @@ int main()
 {
     auto systemBus = std::make_shared<sdbusplus::asio::connection>(io);
     sdbusplus::asio::object_server objServer(systemBus);
-
-    std::cerr << "ChrisDebug: entered MAIN() \n";
 
     static size_t unknownBusObjectCount = 0;
     static bool powerIsOn = false;
@@ -1338,6 +1386,7 @@ int main()
     loadBlacklist(blacklistPath);
 
     systemBus->request_name("xyz.openbmc_project.FruDevice");
+    //systemBus->request_name("xyz.openbmc_project.GxpFruDevice");
 
     // this is a map with keys of pair(bus number, address) and values of
     // the object on dbus
@@ -1459,9 +1508,7 @@ int main()
     rescanBusses(busMap, dbusInterfaceMap, unknownBusObjectCount, powerIsOn,
                  objServer, systemBus);
 
-    std::cerr << "ChrisDebug: about to enter addManagedDevices \n";
-    addManagedDevices(objServer);
-
+    addManagedFRUDevices(objServer);
     io.run();
     return 0;
 }
