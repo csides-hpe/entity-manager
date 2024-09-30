@@ -156,31 +156,31 @@
             "Thresholds": [
                 {
                     "Direction": "greater than",
-                    "Hysteresis": 0.03465,
+                    "Hysteresis": 0.0374,
                     "Name": "upper critical",
                     "Severity": 1,
-                    "Value": 3.465
+                    "Value": 3.74
                 },
                 {
                     "Direction": "greater than",
-                    "Hysteresis": 0.03399,
+                    "Hysteresis": 0.0357,
                     "Name": "upper non critical",
                     "Severity": 0,
-                    "Value": 3.399
+                    "Value": 3.57
                 },
                 {
                     "Direction": "less than",
-                    "Hysteresis": 0.032010000000000004,
+                    "Hysteresis": 0.0323,
                     "Name": "lower non critical",
                     "Severity": 0,
-                    "Value": 3.201
+                    "Value": 3.23
                 },
                 {
                     "Direction": "less than",
-                    "Hysteresis": 0.031349999999999996,
+                    "Hysteresis": 0.0306,
                     "Name": "lower critical",
                     "Severity": 1,
-                    "Value": 3.135
+                    "Value": 3.06
                 }
             ],
             "Type": "ADC"
@@ -3536,8 +3536,8 @@
                 "pout2",
                 "temp1"
             ],
-            "Name": "PVCCFA_EHV_CPU0",
-            "Name1": "PVCCINFAON_CPU0",
+            "Name": "PVCCINFAON_CPU0",
+            "Name1": "PVCCFA_EHV_CPU0",
             "PollRate": 5.0,
             "PowerState": "On",
             "Thresholds": [
@@ -3678,7 +3678,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2971"
+            "Type": "MP2971",
+            "iin_Name": "PVCCINFAON_PVCCFA_EHV_CPU0 Input Current",
+            "pin_Name": "PVCCINFAON_PVCCFA_EHV_CPU0 Input Power",
+            "vin_Name": "PVCCINFAON_PVCCFA_EHV_CPU0 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -3696,8 +3699,8 @@
                 "pout2",
                 "temp1"
             ],
-            "Name": "PVCCFA_EHV_CPU1",
-            "Name1": "PVCCINFAON_CPU1",
+            "Name": "PVCCINFAON_CPU1",
+            "Name1": "PVCCFA_EHV_CPU1",
             "PollRate": 5.0,
             "PowerState": "On",
             "Thresholds": [
@@ -3838,7 +3841,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2971"
+            "Type": "MP2971",
+            "iin_Name": "PVCCINFAON_PVCCFA_EHV_CPU1 Input Current",
+            "pin_Name": "PVCCINFAON_PVCCFA_EHV_CPU1 Input Power",
+            "vin_Name": "PVCCINFAON_PVCCFA_EHV_CPU1 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -3856,8 +3862,8 @@
                 "pout2",
                 "temp1"
             ],
-            "Name": "PVCCFA_EHV_CPU2",
-            "Name1": "PVCCINFAON_CPU2",
+            "Name": "PVCCINFAON_CPU2",
+            "Name1": "PVCCFA_EHV_CPU2",
             "PollRate": 5.0,
             "PowerState": "On",
             "Thresholds": [
@@ -3998,7 +4004,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2971"
+            "Type": "MP2971",
+            "iin_Name": "PVCCINFAON_PVCCFA_EHV_CPU2 Input Current",
+            "pin_Name": "PVCCINFAON_PVCCFA_EHV_CPU2 Input Power",
+            "vin_Name": "PVCCINFAON_PVCCFA_EHV_CPU2 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -4016,8 +4025,8 @@
                 "pout2",
                 "temp1"
             ],
-            "Name": "PVCCFA_EHV_CPU3",
-            "Name1": "PVCCINFAON_CPU3",
+            "Name": "PVCCINFAON_CPU3",
+            "Name1": "PVCCFA_EHV_CPU3",
             "PollRate": 5.0,
             "PowerState": "On",
             "Thresholds": [
@@ -4158,7 +4167,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2971"
+            "Type": "MP2971",
+            "iin_Name": "PVCCINFAON_PVCCFA_EHV_CPU3 Input Current",
+            "pin_Name": "PVCCINFAON_PVCCFA_EHV_CPU3 Input Power",
+            "vin_Name": "PVCCINFAON_PVCCFA_EHV_CPU3 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -4318,7 +4330,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2973"
+            "Type": "MP2973",
+            "iin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU0 Input Current",
+            "pin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU0 Input Power",
+            "vin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU0 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -4478,7 +4493,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2973"
+            "Type": "MP2973",
+            "iin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU1 Input Current",
+            "pin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU1 Input Power",
+            "vin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU1 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -4638,7 +4656,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2973"
+            "Type": "MP2973",
+            "iin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU2 Input Current",
+            "pin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU2 Input Power",
+            "vin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU2 Input Voltage"
         },
         {
             "Address": "0x58",
@@ -4798,7 +4819,10 @@
                     "Value": 1.89
                 }
             ],
-            "Type": "MP2973"
+            "Type": "MP2973",
+            "iin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU3 Input Current",
+            "pin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU3 Input Power",
+            "vin_Name": "PVCCIN_PVCCFA_EHV_FIVRA_CPU3 Input Voltage"
         },
         {
             "Address": "0x40",
