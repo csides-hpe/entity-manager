@@ -47,3 +47,19 @@ if get_option('fru-device')
         install_dir: installdir,
     )
 endif
+
+if get_option('devicetree-vpd')
+    cpp_args_fd = cpp_args
+    executable(
+        'devicetree-vpd-parserd',
+        'dt-vpd-parser.cpp',
+        cpp_args: cpp_args_fd,
+        dependencies: [
+            sdbusplus,
+            phosphor_dbus_interfaces_dep,
+        ],
+        install: true,
+        install_dir: installdir,
+    )
+endif
+
